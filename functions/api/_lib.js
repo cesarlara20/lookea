@@ -32,7 +32,7 @@ export async function sumarUso(env, request, tipo) {
   await contar(env, `${d}:${tipo}:${ip}`, 1);
 }
 
-const MODELOS = (env) => [...new Set([env.GEMINI_TEXT_MODEL, "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.8-flash", "gemini-3.5-flash-lite"].filter(Boolean))];
+const MODELOS = (env) => [...new Set([env.GEMINI_TEXT_MODEL, "gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-3.8-flash"].filter(Boolean))];
 
 function leerJSON(texto) {
   const t = String(texto || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
