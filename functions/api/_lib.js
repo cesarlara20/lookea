@@ -42,10 +42,16 @@ function leerJSON(texto) {
   throw new Error("La IA no regresó JSON válido");
 }
 
-async function llamar(env, model, body) {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY }, body: JSON.stringify(body)
-  });
+async function llamar(env, model, body, ms = 30000) {
+  let r;
+  try {
+    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY }, body: JSON.stringify(body),
+      signal: AbortSignal.timeout(ms)
+    });
+  } catch (e) {
+    throw Object.assign(new Error(`Gemini (${model}): tardó demasiado o no respondió`), { status: 0, google: "timeout" });
+  }
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(`Gemini ${r.status} (${model}): ${data?.error?.message || "error"}`), { status: r.status, google: data?.error?.message || "" });
   return data;
