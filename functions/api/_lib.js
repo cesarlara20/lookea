@@ -32,15 +32,39 @@ export async function sumarUso(env, request, tipo) {
   await contar(env, `${d}:${tipo}:${ip}`, 1);
 }
 
-export async function gemini(env, body) {
-  const model = env.GEMINI_TEXT_MODEL || "gemini-flash-latest";
+const MODELOS = (env) => [...new Set([env.GEMINI_TEXT_MODEL, "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3.8-flash", "gemini-3.5-flash-lite"].filter(Boolean))];
+
+function leerJSON(texto) {
+  const t = String(texto || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  try { return JSON.parse(t); } catch (_) {}
+  const a = t.indexOf("{"), b = t.lastIndexOf("}");
+  if (a >= 0 && b > a) return JSON.parse(t.slice(a, b + 1));
+  throw new Error("La IA no regresó JSON válido");
+}
+
+async function llamar(env, model, body) {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-    body: JSON.stringify(body)
+    method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY }, body: JSON.stringify(body)
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`Gemini ${r.status}: ${data?.error?.message || "error"}`);
-  const texto = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
-  return JSON.parse(texto);
+  if (!r.ok) throw Object.assign(new Error(`Gemini ${r.status} (${model}): ${data?.error?.message || "error"}`), { status: r.status, google: data?.error?.message || "" });
+  return data;
 }
+
+// Pide JSON a Gemini probando varios modelos si uno falla
+export async function gemini(env, body) {
+  let ultimo;
+  for (const modelo of MODELOS(env)) {
+    try {
+      const data = await llamar(env, modelo, body);
+      const texto = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
+      if (!texto) throw new Error("Respuesta vacía");
+      return leerJSON(texto);
+    } catch (e) {
+      ultimo = e; console.log("gemini intento fallido", e.message);
+      if ((e.status === 400 && /api key/i.test(e.google || "")) || e.status === 401 || e.status === 403) break;
+    }
+  }
+  throw ultimo || new Error("Sin modelos");
+}
+export { MODELOS, llamar };
